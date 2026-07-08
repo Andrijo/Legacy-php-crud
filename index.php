@@ -1,25 +1,59 @@
 <?php
 include_once('conexion.php');
-$conexion = mysqli_connect('localhost', 'root', '', 'proyecto'); //Conexión a base de datos
-
-//Llamar clientes
-$sql = 'SELECT * FROM clientes';
-$sentencia = $pdo->prepare($sql);
-$sentencia->execute();
 
 $clientesxpag = 5;
-//Contar articulos
-$totalPageDB = $sentencia->rowCount(); //Contar filas
-$paginas = $totalPageDB / $clientesxpag; //Dividir el número de filas entre los páginas a mostrar
-$paginas = ceil($paginas); //Redondear filas
+$pagina = isset($_GET['pagina']) ? max(1, (int)$_GET['pagina']) : 1;
+$error = '';
+
+// POST: añadir cliente
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $required = ['clave', 'nombre', 'apellido', 'correo', 'telefono', 'sexo'];
+    $valid = true;
+    foreach ($required as $field) {
+        if (empty($_POST[$field])) {
+            $valid = false;
+            break;
+        }
+    }
+    if ($valid) {
+        try {
+            $stmt = $pdo->prepare("INSERT INTO clientes (clave, nombre, apellido, correo, telefono, sexo) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->execute([
+                $_POST['clave'],
+                $_POST['nombre'],
+                $_POST['apellido'],
+                $_POST['correo'],
+                $_POST['telefono'],
+                $_POST['sexo']
+            ]);
+            header('Location: index.php');
+            exit;
+        } catch (PDOException $e) {
+            $error = "Error al añadir cliente.";
+        }
+    } else {
+        $error = "Todos los campos son obligatorios.";
+    }
+}
+
+// Paginación
+$total = $pdo->query("SELECT COUNT(*) FROM clientes")->fetchColumn();
+$paginas = max(1, ceil($total / $clientesxpag));
+$pagina = min($pagina, $paginas);
+$offset = ($pagina - 1) * $clientesxpag;
+
+// Listado
+$stmt = $pdo->prepare("SELECT * FROM clientes LIMIT ? OFFSET ?");
+$stmt->execute([$clientesxpag, $offset]);
+$clientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!doctype html>
-<html lang="en">
+<html lang="es">
 
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css?5.0">
     <title>Práctica Inicial</title>
 </head>
@@ -29,66 +63,67 @@ $paginas = ceil($paginas); //Redondear filas
         <div class="row">
             <div class="col">
                 <h1>Práctica Inicial</h1>
-                <p>Lorem ipsum dolor sit amet consectetur adipisicing elit. Cum vitae nemo itaque! Enim obcaecati impedit sint sapiente, quaerat quidem pariatur. Deleniti, odit vel quo natus excepturi dicta sit nobis id deserunt mollitia alias explicabo et minima cum sunt laudantium facilis. Provident esse nulla impedit aperiam nobis temporibus et ad reprehenderit illo doloremque ex optio explicabo expedita, laudantium iusto cupiditate sed consequuntur id sint. Dolorem maiores sed ut amet quibusdam dolores, saepe dignissimos eum molestias quia minima a nostrum omnis! Repellat rem officia quam pariatur ratione harum delectus asperiores officiis modi cumque nam, natus explicabo consequatur enim. Porro facere, soluta aperiam autem commodi tempora nemo fugit expedita laborum nobis laudantium delectus sed omnis velit nostrum, repudiandae voluptatem magnam veritatis nisi nihil cumque non odit accusantium perferendis! Dolor sequi maiores officia reprehenderit rerum architecto accusantium beatae, delectus vel, aut quo inventore deserunt ipsam porro consectetur perferendis iure neque maxime adipisci? Eligendi, laudantium?</p>
+                <p>Aplicación web para la gestión de clientes. Permite visualizar, buscar, añadir registros y exportar datos en formato XML, con paginación integrada y una interfaz limpia usando Bootstrap.</p>
             </div>
         </div>
+
+        <?php if ($error): ?>
+            <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
+        <?php endif; ?>
+
         <div class="d-grid gap-2 col-4 mx-auto mt-3">
             <button id="myBoton2" class="btn btn-light btn-outline-dark" type="button" onclick="ocultarTabla()">Ocultar tabla</button>
-            <button id="myBoton" class="btn btn-light btn-outline-dark" type="button" onclick="mostrarTabla()" value="actualizar" style="display: none;">Mostrar tabla</button>
-            <button class="btn btn-light btn-outline-dark" type="button"> <a href="" download="archivo/clientes.xml">  Descargar XML </a></button>
+            <button id="myBoton" class="btn btn-light btn-outline-dark" type="button" onclick="mostrarTabla()" style="display: none;">Mostrar tabla</button>
+
+            <a href="archivo/clientes.xml" download="clientes.xml" class="btn btn-light btn-outline-dark">Descargar XML</a>
+
+            <button type="button" class="btn btn-light btn-outline-dark" data-bs-toggle="modal" data-bs-target="#addClienteModal">Añadir cliente</button>
 
             <!-- Modal -->
-            <!-- Button trigger modal -->
-            <button type="button" class="btn btn-light btn-outline-dark" data-bs-toggle="modal" data-bs-target="#añadirClienteModal">
-                Añadir cliente
-            </button>
-
-            <!-- Modal -->
-            <div class="modal fade" id="añadirClienteModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+            <div class="modal fade" id="addClienteModal" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog">
                     <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="exampleModalLabel">Añadir cliente</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <form action="" id="formCliente">
-                                <label for="">ID</label>
-                                <input type="text" class="form-control" placeholder="ID" id="id" name="id">
-                                <label for="">Clave</label>
-                                <input type="text" class="form-control" placeholder="Clave" id="clave" name="clave">
-                                <label for="">Nombre</label>
-                                <input type="text" class="form-control" placeholder="Nombre" id="nombre" name="nombre">
-                                <label for="">Apellido</label>
-                                <input type="text" class="form-control" placeholder="Apellido" id="apellido" name="apellido">
-                                <label for="">Correo</label>
-                                <input type="email" class="form-control" placeholder="Ejemplo@gmail.com" id="correo" name="correo">
-                                <label for="">Teléfono</label>
-                                <input type="text" class="form-control" placeholder="Teléfono" id="telefono" name="telefono">
-                                <label for="">Sexo</label>
-                                <select class="form-control" name="sexo" id="sexo">
-                                    <option value="">H</option>
-                                    <option value="">M</option>
+                        <form method="post">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Añadir cliente</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <label>Clave</label>
+                                <input type="text" class="form-control" placeholder="Clave" name="clave" required>
+                                <label>Nombre</label>
+                                <input type="text" class="form-control" placeholder="Nombre" name="nombre" required>
+                                <label>Apellido</label>
+                                <input type="text" class="form-control" placeholder="Apellido" name="apellido" required>
+                                <label>Correo</label>
+                                <input type="email" class="form-control" placeholder="correo@ejemplo.com" name="correo" required>
+                                <label>Teléfono</label>
+                                <input type="text" class="form-control" placeholder="Teléfono" name="telefono" required>
+                                <label>Sexo</label>
+                                <select class="form-control" name="sexo" required>
+                                    <option value="">Seleccionar</option>
+                                    <option value="H">H</option>
+                                    <option value="M">M</option>
                                 </select>
-                            </form>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-dark" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="submit" id="btnAgregar" class="btn btn-light btn-outline-dark">Aceptar</button>
-                        </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-dark" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="submit" class="btn btn-light btn-outline-dark">Aceptar</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
-
         </div>
+
         <form style="text-align:right;" method="get" action="search.php">
-            <label >
+            <label>
                 <input type="text" name="keywords" autocomplete="off" placeholder="Buscar">
             </label>
-            <input type="submit" value="Search"><br>
+            <input type="submit" value="Buscar"><br>
         </form>
-        <div class="row">
 
+        <div class="row">
             <table id="myTable" class="table table-bordered border-dark mt-5">
                 <thead class="table-dark">
                     <tr>
@@ -101,52 +136,43 @@ $paginas = ceil($paginas); //Redondear filas
                         <th>Sexo</th>
                     </tr>
                 </thead>
-                <?php
-                $sql = "SELECT * from clientes"; //Traer todos los datos de la tabla
-                $result = mysqli_query($conexion, $sql); //
-
-                while ($mostrar = mysqli_fetch_array($result)) {
-
-                ?>
-                    <tbody>
+                <tbody>
+                    <?php foreach ($clientes as $c): ?>
                         <tr>
-                            <td><?php echo $mostrar['id'] ?></td>
-                            <td><?php echo $mostrar['clave'] ?></td>
-                            <td><?php echo $mostrar['nombre'] ?></td>
-                            <td><?php echo $mostrar['apellido'] ?></td>
-                            <td><?php echo $mostrar['correo'] ?></td>
-                            <td><?php echo $mostrar['telefono'] ?></td>
-                            <td><?php echo $mostrar['sexo'] ?></td>
+                            <td><?= htmlspecialchars($c['id']) ?></td>
+                            <td><?= htmlspecialchars($c['clave']) ?></td>
+                            <td><?= htmlspecialchars($c['nombre']) ?></td>
+                            <td><?= htmlspecialchars($c['apellido']) ?></td>
+                            <td><?= htmlspecialchars($c['correo']) ?></td>
+                            <td><?= htmlspecialchars($c['telefono']) ?></td>
+                            <td><?= htmlspecialchars($c['sexo']) ?></td>
                         </tr>
-                    </tbody>
-                <?php
-                }
-                ?>
+                    <?php endforeach; ?>
+                </tbody>
             </table>
+
+            <?php if ($paginas > 1): ?>
             <nav aria-label="..." id="myPagination">
                 <ul class="pagination">
-                    <li class="page-item <?php echo $_GET['pagina'] <= 1 ? 'disabled' : '' ?>">
-                        <a class="page-link" href="index.php?pagina= <?php echo $_GET['pagina'] - 1 ?>">Anterior</a>
+                    <li class="page-item <?= $pagina <= 1 ? 'disabled' : '' ?>">
+                        <a class="page-link" href="?pagina=<?= $pagina - 1 ?>">Anterior</a>
                     </li>
-
-                    <?php for ($i = 0; $i < $paginas; $i++) : ?>
-                        <li class="page-item <?php echo $_GET['pagina'] == $i + 1 ? 'active' : '' ?>"><a class="page-link" href="index.php?pagina=<?php echo ($i + 1) ?>">
-                                <?php echo ($i + 1) ?>
-                            </a></li>
-                    <?php endfor ?>
-
-                    <li class="page-item <?php echo $_GET['pagina'] >= $paginas ? 'disabled' : '' ?>">
-                        <a class="page-link" href="index.php?pagina= <?php echo $_GET['pagina'] + 1 ?>"">Siguiente</a>
+                    <?php for ($i = 1; $i <= $paginas; $i++): ?>
+                        <li class="page-item <?= $pagina == $i ? 'active' : '' ?>">
+                            <a class="page-link" href="?pagina=<?= $i ?>"><?= $i ?></a>
+                        </li>
+                    <?php endfor; ?>
+                    <li class="page-item <?= $pagina >= $paginas ? 'disabled' : '' ?>">
+                        <a class="page-link" href="?pagina=<?= $pagina + 1 ?>">Siguiente</a>
                     </li>
                 </ul>
             </nav>
+            <?php endif; ?>
         </div>
     </div>
 
-    <script src=" js/script.js"> </script>
-                            <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script>
-                            <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.10.2/dist/umd/popper.min.js" integrity="sha384-7+zCNj/IqJ95wo16oMtfsKbZ9ccEh31eOz1HGyDuCQ6wgnyJNSYdrPa03rtR1zdB" crossorigin="anonymous"></script>
-                            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.min.js" integrity="sha384-QJHtvGhmr9XOIpI6YVutG+2QOK9T+ZnN4kzFN1RtK3zEFEIsxhlmWl5/YESvpZ13" crossorigin="anonymous"></script>
+    <script src="js/script.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 
 </html>

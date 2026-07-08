@@ -12,3 +12,4 @@ function mostrarTabla() {
     document.getElementById('myBoton').style.display = 'none';
 }
 
+

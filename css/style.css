@@ -15,7 +15,7 @@ td {
 }
 
 .pagination {
-    display: flexbox;
+    display: flex;
     justify-content: flex-end;
 }
 
